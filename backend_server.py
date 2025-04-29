@@ -101,9 +101,11 @@ def tts(text, filename="customer_reply.wav"):
         inputs["input_ids"] = inputs["input_ids"].long()
         
         # Generate audio
-        with torch.cuda.amp.autocast():  # Enable automatic mixed precision
+        with torch.amp.autocast(device_type='cuda'):  # Enable automatic mixed precision
             waveform = model(**inputs).waveform
-        
+
+        waveform = waveform.to(torch.float32)  # Convert to float32
+
         # Move waveform back to CPU for saving
         waveform = waveform.cpu()
         
