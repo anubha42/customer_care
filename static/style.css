@@ -1,0 +1,54 @@
+body {
+    font-family: Arial, sans-serif;
+    background-color: #f4f4f9;
+    margin: 0;
+    padding: 0;
+}
+
+h1 {
+    text-align: center;
+    color: #333333;
+    margin-top: 20px;
+    font-size: 28px;
+}
+
+#controls {
+    text-align: center;
+    margin-top: 30px;
+}
+
+button {
+    margin: 5px;
+    padding: 10px 20px;
+    font-size: 16px;
+    background-color: #4CAF50;
+    color: white;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+}
+
+button:disabled {
+    background-color: #cccccc;
+    cursor: not-allowed;
+}
+
+audio {
+    display: block;
+    margin: 20px auto;
+    width: 80%;
+}
+
+#message {
+    text-align: center;
+    margin-top: 20px;
+    font-size: 18px;
+    color: #333333;
+}
+
+footer {
+    text-align: center;
+    margin-top: 50px;
+    color: #777777;
+    font-size: 14px;
+}

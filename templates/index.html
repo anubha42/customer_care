@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Real-Time Audio Processing</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <h1>Real-Time Audio Processing Tool</h1>
+    <div id="controls">
+        <button id="startRecording" onclick="startRecording()">Start Recording</button>
+        <button id="stopRecording" onclick="stopRecording()" disabled>Stop Recording</button>
+    </div>
+    <audio id="playbackAudio" controls style="display: none;"></audio>
+    <div id="message"></div>
+    <footer>
+        <p>© 2025 Real-Time Audio Processing Tool. All rights reserved.</p>
+    </footer>
+
+    <script>
+        let mediaRecorder;
+        let audioChunks = [];
+
+        async function startRecording() {
+            document.getElementById('startRecording').disabled = true;
+            document.getElementById('stopRecording').disabled = false;
+
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            mediaRecorder = new MediaRecorder(stream);
+
+            mediaRecorder.ondataavailable = (event) => {
+                audioChunks.push(event.data);
+            };
+
+            mediaRecorder.start();
+        }
+
+        async function stopRecording() {
+            document.getElementById('startRecording').disabled = false;
+            document.getElementById('stopRecording').disabled = true;
+
+            mediaRecorder.stop();
+            mediaRecorder.onstop = async () => {
+                const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
+                audioChunks = []; // Clear the chunks for the next session
+
+                const formData = new FormData();
+                formData.append('file', audioBlob, 'recording.wav');
+
+                // Send the recorded audio to the backend
+                const response = await fetch('/upload', { method: 'POST', body: formData });
+                const data = await response.json();
+
+                if (data.download_url) {
+                    // Play the audio returned by the backend
+                    const playbackAudio = document.getElementById('playbackAudio');
+                    playbackAudio.src = data.download_url;
+                    playbackAudio.style.display = 'block';
+                    playbackAudio.play();
+
+                    document.getElementById('message').innerText = "Audio processed successfully. Playing the result.";
+                } else {
+                    document.getElementById('message').innerText = data.error || "An error occurred while processing the audio.";
+                }
+            };
+        }
+    </script>
+</body>
+</html>
