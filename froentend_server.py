@@ -6,7 +6,7 @@ import os
 app = Flask(__name__)
 
 # Update this with the actual backend server URL
-BACKEND_URL = "https://wy7miy5xr70cm8-3500.proxy.runpod.net/process_audio"  # Replace with the backend server's IP and port
+BACKEND_URL = "https://9k4a4bih5jork6-3500.proxy.runpod.net/process_audio"  # Replace with the backend server's IP and port
 
 
 

@@ -11,6 +11,7 @@ from dotenv import load_dotenv
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
 import numpy as np
+import uuid
 
 # Initialize Flask app and SocketIO
 app = Flask(__name__)
@@ -29,9 +30,9 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 def load_models():
     global model, tokenizer
     print("Loading models...")
-    model = VitsModel.from_pretrained("facebook/mms-tts-hin").to(device)
+    model = VitsModel.from_pretrained("facebook/mms-tts-mar").to(device)
     model.eval()  # Set model to evaluation mode
-    tokenizer = AutoTokenizer.from_pretrained("facebook/mms-tts-hin")
+    tokenizer = AutoTokenizer.from_pretrained("facebook/mms-tts-mar")
     print("Models loaded successfully!")
 
 # Call the model loading function
@@ -43,9 +44,9 @@ BASE_URL = "https://api.openai.com/v1"
 
 # System prompt
 SYSTEM_PROMPT = (
-    "You are a casual Hindi speaking customer calling customer care for a telecom service. "
+    "You are a casual Marathi speaking customer calling customer care for a telecom service. "
     "Your complaint is that your connection has been cut even after you have paid the monthly bill. "
-    "You speak Hindi with a polite but slightly frustrated tone. "
+    "You speak Marathi with a polite but slightly frustrated tone. "
     "Keep your responses concise and stay in character as a customer."
     "If asked numbers, write the number as a word."
 )
@@ -80,14 +81,14 @@ async def query_llm(messages):
             response = await resp.json()
             customer_text = response['choices'][0]['message']['content']
             print(f"Generated LLM Response (before transliteration): {customer_text}")  # Debug: Print raw LLM response
-            tr_customer_text = UnicodeIndicTransliterator.transliterate(customer_text, "en", "hi")
+            tr_customer_text = UnicodeIndicTransliterator.transliterate(customer_text, "en", "mr")
             normalized_text = unicodedata.normalize('NFC', tr_customer_text)
             print(f"Generated LLM Response : {tr_customer_text}")  # Debug: Print transliterated response
             return tr_customer_text
 
 # Generate TTS audio
-@torch.no_grad()  # Disable gradient computation for inference
-def tts(text, filename="customer_reply.wav"):
+@torch.no_grad()
+def tts(text, filename):
     """Convert text to speech using GPU acceleration."""
     if not text.strip():
         raise ValueError("Empty input text")
@@ -101,7 +102,7 @@ def tts(text, filename="customer_reply.wav"):
         inputs["input_ids"] = inputs["input_ids"].long()
         
         # Generate audio
-        with torch.amp.autocast(device_type='cuda'):  # Enable automatic mixed precision
+        with torch.amp.autocast(device_type="cuda"):  # Enable automatic mixed precision
             waveform = model(**inputs).waveform
 
         waveform = waveform.to(torch.float32)  # Convert to float32
@@ -109,11 +110,23 @@ def tts(text, filename="customer_reply.wav"):
         # Move waveform back to CPU for saving
         waveform = waveform.cpu()
         
-        # Save audio file explicitly setting the format to 'wav'
-        torchaudio.save(filename, waveform, 16000, format='wav')  # Specify format explicitly
-        print(f"TTS audio saved to: {filename}")  # Debug: Print TTS output file path
+        # Ensure directory exists
+        if not os.path.exists(CACHE_DIR):
+            os.makedirs(CACHE_DIR, exist_ok=True)
+            print(f"Created cache directory: {CACHE_DIR}")
+        
+        # Save audio file
+        print(f"Attempting to save TTS file to: {filename}")
+        torchaudio.save(filename, waveform, 16000, format="wav")
+        
+        # Verify file exists
+        if os.path.exists(filename):
+            print(f"TTS file saved successfully to: {filename}")
+        else:
+            print(f"Error: File not created at: {filename}")
+        
         return filename
-    
+
     except Exception as e:
         print(f"Error in TTS generation: {str(e)}")
         raise
@@ -127,38 +140,46 @@ async def process_audio():
     """Handle audio processing request with GPU acceleration."""
     if 'file' not in request.files:
         return jsonify({'error': 'No audio file provided'}), 400
-    
+
     audio_file = request.files['file']
-    
+
     try:
-        # Generate unique filename for this request
-        cache_filename = f"{CACHE_DIR}/response_{np.random.randint(1, 100000)}.wav"
-        
+        # Generate unique filename with absolute path
+        cache_filename = os.path.abspath(os.path.join(CACHE_DIR, f"response_{uuid.uuid4().hex}.wav"))
+        print(f"Cache filename resolved to: {cache_filename}")
+
+        # Ensure CACHE_DIR exists
+        if not os.path.exists(CACHE_DIR):
+            os.makedirs(CACHE_DIR, exist_ok=True)
+            print(f"Created cache directory: {CACHE_DIR}")
+
         # Transcribe audio
         transcription = await transcribe_audio(audio_file.read())
         messages.append({"role": "user", "content": transcription})
-        
+
         # Get LLM response
         customer_response = await query_llm(messages)
         messages.append({"role": "assistant", "content": customer_response})
-        
+
         # Generate TTS using GPU
         loop = asyncio.get_event_loop()
         output_file = await loop.run_in_executor(thread_pool, tts, customer_response, cache_filename)
-        
+
+        # Debug: Check file existence after generation
+        if not os.path.exists(output_file):
+            print(f"Error: Generated file does not exist: {output_file}")
+            return jsonify({'error': 'Generated TTS file not found'}), 404
+
+        print(f"Generated TTS file at: {output_file}")
         return send_file(output_file, mimetype='audio/wav')
-    
+
     except Exception as e:
-        print(f"Error in process_audio: {str(e)}")  # Debug: Print error
+        print(f"Error in process_audio: {str(e)}")
         return jsonify({'error': str(e)}), 500
-    
+
     finally:
-        # Cleanup temporary files
-        try:
-            if os.path.exists(cache_filename):
-                os.remove(cache_filename)
-        except:
-            pass
+        # Disable cleanup for debugging
+        print(f"Skipping cleanup for debugging: {cache_filename}")
 
 # GPU memory management
 def cleanup_gpu_memory():

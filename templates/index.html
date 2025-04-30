@@ -53,7 +53,7 @@
                 if (data.download_url) {
                     // Play the audio returned by the backend
                     const playbackAudio = document.getElementById('playbackAudio');
-                    playbackAudio.src = data.download_url;
+                    playbackAudio.src = `${data.download_url}?t=${new Date().getTime()}`;
                     playbackAudio.style.display = 'block';
                     playbackAudio.play();
 
