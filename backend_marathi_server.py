@@ -44,11 +44,12 @@ BASE_URL = "https://api.openai.com/v1"
 
 # System prompt
 SYSTEM_PROMPT = (
-    "You are a casual Marathi speaking customer calling customer care for a telecom service. "
-    "Your complaint is that your connection has been cut even after you have paid the monthly bill. "
-    "You speak Marathi with a polite but slightly frustrated tone. "
-    "Keep your responses concise and stay in character as a customer."
-    "If asked numbers, write the number as a word."
+    """तुम्ही "Vodanfone" कंपनीसाठी काम करणारे एक ग्राहक सेवा प्रतिनिधी आहात.
+       तुम्ही फोनवर मराठीत विनम्र आणि मदतीचा स्वर ठेवून संवाद साधता. 
+       ग्राहकांच्या प्रश्नांना स्पष्ट, अचूक आणि सोप्या भाषेत उत्तर देता. 
+       तुमचं मुख्य उद्दिष्ट म्हणजे ग्राहकांना त्यांच्या समस्यांवर त्वरीत आणि समाधानकारक उत्तरं देणं. 
+       तुम्ही नेहमी Vodafone/Vodanfone सेवांशी संबंधित माहितीच द्या आणि शक्य तितक्या मदतीचा प्रयत्न करा. 
+       इंग्रजी किंवा इतर भाषांचा वापर फक्त ग्राहक विचारल्यासच करा."""
 )
 
 # Conversation messages
@@ -63,6 +64,7 @@ async def transcribe_audio(audio_data):
         form = aiohttp.FormData()
         form.add_field("model", "whisper-1")
         form.add_field("response_format", "text")
+        form.add_field("prompt", "ट्रान्सक्रिप्शनचे भाषांतर मराठीत करा. संभाषण अचूक, स्पष्ट आणि नैसर्गिक मराठीत लिहा. इंग्रजी किंवा अन्य भाषांतील शब्द जसेच्या तसे लिहा.")
         form.add_field("file", audio_data, filename="audio.wav")
         
         async with session.post(f"{BASE_URL}/audio/transcriptions", headers=HEADERS, data=form) as resp:
@@ -76,15 +78,13 @@ async def transcribe_audio(audio_data):
 async def query_llm(messages):
     """Query GPT-4 for response."""
     async with aiohttp.ClientSession() as session:
-        data = {"model": "gpt-4", "messages": messages}
+        data = {"model": "gpt-4.1", "messages": messages}
         async with session.post(f"{BASE_URL}/chat/completions", headers=HEADERS, json=data) as resp:
             response = await resp.json()
             customer_text = response['choices'][0]['message']['content']
             print(f"Generated LLM Response (before transliteration): {customer_text}")  # Debug: Print raw LLM response
-            tr_customer_text = UnicodeIndicTransliterator.transliterate(customer_text, "en", "mr")
-            normalized_text = unicodedata.normalize('NFC', tr_customer_text)
-            print(f"Generated LLM Response : {tr_customer_text}")  # Debug: Print transliterated response
-            return tr_customer_text
+            print(f"Generated LLM Response : {customer_text}")  # Debug: Print transliterated response
+            return customer_text
 
 # Generate TTS audio
 @torch.no_grad()
@@ -95,8 +95,8 @@ def tts(text, filename):
     
     try:
         # Tokenize text
-        inputs = tokenizer(text, return_tensors="pt", padding=True, truncation=True, max_length=512)
-        
+        inputs = tokenizer(text, return_tensors="pt", padding=True, truncation=True, max_length=4096)
+
         # Move inputs to GPU
         inputs = {k: v.to(device) for k, v in inputs.items()}
         inputs["input_ids"] = inputs["input_ids"].long()
